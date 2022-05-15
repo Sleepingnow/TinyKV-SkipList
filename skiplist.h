@@ -355,6 +355,7 @@ void SkipList<K, V>::load_file(std::ifstream& file_reader)
         ss << *key;
         ss >> k;
         ss.clear();
+        
         ss << *value;
         ss >> v;
         insert_elem(k, v);
