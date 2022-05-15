@@ -1,5 +1,6 @@
-#include <string>
+#include <cstring>
 #include <fstream>
+#include <sstream>
 #include <mutex>
 
 std::mutex mtx;     
@@ -12,7 +13,7 @@ class Node
 public:
     Node() {}
 
-    Node(int) {}
+    Node(int);
 
     Node(K, V, int);
 
@@ -22,7 +23,7 @@ public:
         return key;
     }
 
-    V get_value const {
+    V get_value() const {
         return value;
     }
 
@@ -31,7 +32,7 @@ public:
     }
 
     // 结点在每一层的后继结点数组
-    Node<key, value> **next;
+    Node<K, V> **next;
 
     // 结点的层数
     int node_level;
@@ -93,9 +94,9 @@ public:
 
     int random_level();
 
-    void store_file(std::ifstream& file_writer);
+    void store_file(std::ofstream& file_writer);
 
-    void load_file(std::ofstream& file_reader);
+    void load_file(std::ifstream& file_reader);
 
     void display_skiplist();
 
@@ -118,7 +119,7 @@ private:
     int elem_count;
 
     // 跳表的头结点，其中不携带KV信息
-    Node* header;
+    Node<K, V>* header;
 
     // 写入文件流
     // 读取文件流
@@ -136,7 +137,8 @@ SkipList<K, V>::SkipList(const int alloc_max_level)
 template<typename K, typename V>
 SkipList<K, V>::~SkipList()
 {
-    Node<K, V>* node = header -> next[0], *temp;
+    Node<K, V>* node = header -> next[0];
+    Node<K, V>* temp;
     while(node) {
         temp = node -> next[0];
         delete node;
@@ -177,7 +179,7 @@ bool SkipList<K, V>::search_elem(const K key, V& value)
             cur = cur -> next[i];
     }
 
-    if(cur -> next[0] && cur -> next[0] == key) {
+    if(cur -> next[0] && cur -> next[0] -> get_key() == key) {
         value = cur -> next[0] -> get_value();
         return true;
     }
@@ -198,7 +200,7 @@ bool SkipList<K, V>::insert_elem(const K key, const V value)
 
     Node<K, V>* cur = header;
     Node<K, V>* pre_node[max_level + 1];
-    memset(pre_node, 0, sizeof(Node<K, V>*)*(_max_level+1));
+    memset(pre_node, 0, sizeof(Node<K, V>*)*(max_level+1));
 
     // 找到新结点在每一层的前驱，从当前的最高层开始
     for(int i = cur_level; i >= 0; --i){
@@ -217,10 +219,10 @@ bool SkipList<K, V>::insert_elem(const K key, const V value)
     }
 
     for(int i = 0; i <= cur_level; ++i) {
-        node -> next[i] = pre_node -> next[i];
-        pre_node -> next[i] = node;
+        node -> next[i] = pre_node[i] -> next[i];
+        pre_node[i] -> next[i] = node;
     }
-    _element_count ++;
+    ++elem_count;
 
     mtx.unlock();
     return true;
@@ -242,7 +244,7 @@ bool SkipList<K, V>::delete_elem(const K key)
 
     Node<K, V>* cur = header;
     Node<K, V>* pre_node[max_level + 1];
-    memset(pre_node, 0, sizeof(Node<K, V>*)*(_max_level+1));
+    memset(pre_node, 0, sizeof(Node<K, V>*)*(max_level+1));
 
     // 找到新结点在每一层的前驱，从当前的最高层开始
     for(int i = cur_level; i >= 0; --i){
@@ -306,12 +308,12 @@ template<typename K, typename V>
 void SkipList<K, V>::display_skiplist() 
 {
     std::cout << "\n*****SkipList*****"<<"\n"; 
-    for (int i = 0; i <= _skip_list_level; i++) {
-        Node<K, V> *node = this->_header->forward[i]; 
+    for (int i = 0; i <= cur_level; i++) {
+        Node<K, V> *node = this->header->next[i]; 
         std::cout << "Level " << i << ": ";
         while (node != NULL) {
             std::cout << node->get_key() << ":" << node->get_value() << ";";
-            node = node->forward[i];
+            node = node->next[i];
         }
         std::cout << std::endl;
     }
@@ -319,11 +321,11 @@ void SkipList<K, V>::display_skiplist()
 
 // 将跳表中数据存储到文件中
 template<typename K, typename V> 
-void SkipList<K, V>::store_file(std::ifstream& file_writer) 
+void SkipList<K, V>::store_file(std::ofstream& file_writer) 
 {
     mtx.lock();
     
-    Node<K, V>* node = head -> next[0];
+    Node<K, V>* node = header -> next[0];
     while (node != NULL)
     {
         file_writer << node -> get_key() << ":" << node -> get_value() << "\n";
@@ -336,10 +338,8 @@ void SkipList<K, V>::store_file(std::ifstream& file_writer)
 
 // 将文件中数据加载成为一个跳表
 template<typename K, typename V> 
-void SkipList<K, V>::load_file(std::ofstream& file_reader) 
+void SkipList<K, V>::load_file(std::ifstream& file_reader) 
 {
-    mtx.lock();
-
     std::string line;
     std::string* key = new std::string();
     std::string* value = new std::string();
@@ -348,11 +348,17 @@ void SkipList<K, V>::load_file(std::ofstream& file_reader)
         get_key_value_from_string(line, key, value);
         if(key -> empty() || value -> empty())
             continue;
-        
-        insert_elem(*key, *value);
-    }
 
-    mtx.unlock();
+        K k;
+        V v;
+        std::stringstream ss;
+        ss << *key;
+        ss >> k;
+        ss.clear();
+        ss << *value;
+        ss >> v;
+        insert_elem(k, v);
+    }
 }
 
 template<typename K, typename V>
